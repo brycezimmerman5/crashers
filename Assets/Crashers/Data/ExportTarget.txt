@@ -1,0 +1,1 @@
+The Export Runtime Definitions menu writes .asset files into this folder. Play mode does not need them.

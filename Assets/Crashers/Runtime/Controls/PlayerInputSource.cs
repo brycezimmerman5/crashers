@@ -68,7 +68,7 @@ namespace Crashers.Controls
         {
             if (map != null) return;
             map = new InputActionMap("Player");
-            move = map.AddAction("Move", InputActionType.Value, expectedControlLayout: "Vector2");
+            move = map.AddAction("Move", InputActionType.Value);
             move.AddCompositeBinding("2DVector")
                 .With("Up", "<Keyboard>/w")
                 .With("Down", "<Keyboard>/s")

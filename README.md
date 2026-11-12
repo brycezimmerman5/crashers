@@ -4,9 +4,11 @@ Sprite-based 2.5D arena for Unity **6000.0.32f1**. Built-in render pipeline, new
 
 ## Open and play
 
-1. Install Unity **6000.0.32f1** and open this folder.
+1. Install Unity **6000.0.32f1** and open the `Crashers` folder (the Unity project).
 2. Let the editor import packages. That is the only required setup.
-3. Open `Assets/Crashers/Scenes/Arena.unity` if it is not already open (an empty editor window opens it automatically) and press Play.
+3. Open `Assets/Scenes/Arena.unity` if it is not already open (an empty editor window opens it automatically) and press Play.
+
+The player is the viking in `Assets/Art`. Idle plays on its own. Light, heavy, and aerial attacks send the `attack1` trigger, which plays `attack`.
 
 `Crashers/Export Runtime Definitions` is optional. It writes the same definitions the arena already creates at Play into `Assets/Crashers/Data/`.
 
@@ -23,7 +25,7 @@ Sprite-based 2.5D arena for Unity **6000.0.32f1**. Built-in render pipeline, new
 | Ability 3, Bolt | O | Right shoulder |
 | Pick up weapon | E | East (B / Circle) |
 
-Light attacks chain three hits. Heavy attacks chain two. In the air, either attack button uses the aerial hit. Bolt is locked until level 2. Killing the red grunt drops a broadsword; stand on it and press interact. The sword equips immediately because the weapon slot starts empty. Progress (level, XP, gold, unlocks) is saved to `Application.persistentDataPath/crashers-progress.json`. The knight respawns a couple of seconds after falling.
+Light attacks chain three hits. Heavy attacks chain two. In the air, either attack button uses the aerial hit. Bolt is locked until level 2. Killing the red grunt drops a broadsword; stand on it and press interact. The sword equips immediately because the weapon slot starts empty. Progress (level, XP, gold, unlocks) is saved to `Application.persistentDataPath/crashers-progress.json`. The viking respawns a couple of seconds after falling.
 
 ## Depth
 

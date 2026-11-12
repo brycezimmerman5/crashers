@@ -7,7 +7,7 @@ namespace Crashers.EditorTools
     [InitializeOnLoad]
     static class ArenaAutoOpen
     {
-        const string ArenaPath = "Assets/Crashers/Scenes/Arena.unity";
+        const string ArenaPath = "Assets/Scenes/Arena.unity";
 
         static ArenaAutoOpen()
         {

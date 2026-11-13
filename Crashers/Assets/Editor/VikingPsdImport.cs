@@ -1,5 +1,6 @@
 using System;
 using System.Reflection;
+using System.Text;
 using UnityEditor;
 using UnityEngine;
 
@@ -7,45 +8,74 @@ namespace Crashers.EditorTools
 {
     /// <summary>
     /// The viking PSD stores six layers. If Unity falls back to the texture importer,
-    /// those layers collapse into one image. This puts the PSD Importer back and
-    /// rebuilds the layer sprites.
+    /// those layers collapse into one image. Crashers/Restore Viking PSD Slices puts
+    /// the PSD Importer back and rebuilds the layer sprites.
     /// </summary>
     [InitializeOnLoad]
     static class VikingPsdImport
     {
         const string ArtPath = "Assets/Art/vikingcrashers.psd";
         const string SessionKey = "Crashers.VikingPsdSlices";
+        const string RetryKey = "Crashers.VikingPsdRetries";
 
         static VikingPsdImport()
         {
-            EditorApplication.delayCall += EnsureSlicedImport;
+            EditorApplication.delayCall += TryAutomaticRestore;
         }
 
-        static void EnsureSlicedImport()
+        [MenuItem("Crashers/Restore Viking PSD Slices")]
+        public static void RestoreFromMenu()
+        {
+            SessionState.EraseBool(SessionKey);
+            string message = Restore();
+            Debug.Log(message);
+            EditorUtility.DisplayDialog("Viking PSD", message, "OK");
+        }
+
+        static void TryAutomaticRestore()
         {
             if (SessionState.GetBool(SessionKey, false)) return;
             if (EditorApplication.isCompiling || EditorApplication.isUpdating)
             {
-                EditorApplication.delayCall += EnsureSlicedImport;
+                EditorApplication.delayCall += TryAutomaticRestore;
                 return;
             }
             if (EditorApplication.isPlayingOrWillChangePlaymode) return;
-            if (AssetImporter.GetAtPath(ArtPath) == null) return;
+            if (FindPsdImporter() == null)
+            {
+                int retries = SessionState.GetInt(RetryKey, 0);
+                if (retries > 40) return;
+                SessionState.SetInt(RetryKey, retries + 1);
+                EditorApplication.delayCall += TryAutomaticRestore;
+                return;
+            }
+
+            string message = Restore();
+            Debug.Log(message);
+            SessionState.SetBool(SessionKey, true);
+        }
+
+        static string Restore()
+        {
+            if (AssetImporter.GetAtPath(ArtPath) == null)
+            {
+                return "Could not find " + ArtPath + ".\n\nOpen the Crashers folder as the Unity project, then run Crashers → Restore Viking PSD Slices again.";
+            }
 
             Type importerType = FindPsdImporter();
-            if (importerType == null) return;
+            if (importerType == null)
+            {
+                return "The 2D PSD Importer package is not loaded yet.\n\nOpen Window → Package Manager and wait until 2D PSD Importer finishes installing. Then run Crashers → Restore Viking PSD Slices again.";
+            }
 
             AssetImporter importer = AssetImporter.GetAtPath(ArtPath);
             if (importer.GetType() != importerType)
                 SetImporterOverride(importerType);
 
             importer = AssetImporter.GetAtPath(ArtPath);
-            if (importer == null || importer.GetType() != importerType) return;
-
-            if (SpriteCount() >= 6)
+            if (importer == null || importer.GetType() != importerType)
             {
-                SessionState.SetBool(SessionKey, true);
-                return;
+                return "Unity did not switch " + ArtPath + " to the PSD Importer. Select the file in the Project window, set the importer dropdown to PSD Importer, and run this menu again.";
             }
 
             var serialized = new SerializedObject(importer);
@@ -59,23 +89,37 @@ namespace Crashers.EditorTools
             importer.SaveAndReimport();
 
             importer = AssetImporter.GetAtPath(ArtPath);
-            if (importer == null) return;
+            if (importer == null)
+                return "The PSD disappeared during reimport.";
+
             serialized = new SerializedObject(importer);
             SetBool(serialized.FindProperty("m_ResliceFromLayer"), false);
             serialized.ApplyModifiedPropertiesWithoutUndo();
             importer.SaveAndReimport();
-            SessionState.SetBool(SessionKey, true);
+            AssetDatabase.Refresh();
+
+            string names = SpriteNames();
+            if (string.IsNullOrEmpty(names))
+            {
+                return "The PSD Importer ran, but no layer sprites were created. Check the Console for an error that starts with \"Failed to import file\" on vikingcrashers.psd.";
+            }
+
+            return "Viking PSD slices are back. Expand Assets/Art/vikingcrashers in the Project window.\n\n" + names;
         }
 
-        static int SpriteCount()
+        static string SpriteNames()
         {
             UnityEngine.Object[] assets = AssetDatabase.LoadAllAssetRepresentationsAtPath(ArtPath);
+            var builder = new StringBuilder();
             int count = 0;
             for (int i = 0; i < assets.Length; i++)
             {
-                if (assets[i] is Sprite) count++;
+                if (assets[i] is not Sprite) continue;
+                if (count > 0) builder.Append('\n');
+                builder.Append(assets[i].name);
+                count++;
             }
-            return count;
+            return count == 0 ? string.Empty : builder.ToString();
         }
 
         static void SetInt(SerializedProperty parent, string name, int value)

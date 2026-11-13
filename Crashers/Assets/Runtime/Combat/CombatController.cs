@@ -33,6 +33,9 @@ namespace Crashers.Combat
         readonly List<Hurtbox> overlap = new List<Hurtbox>();
         readonly HashSet<int> alreadyHit = new HashSet<int>();
 
+        public event System.Action SwingStarted;
+        public event System.Action SwingCancelled;
+
         public SwingPhase Phase => phase;
         public AttackKind ActiveKind => current != null ? current.Kind : AttackKind.Light;
         public float PhaseProgress
@@ -70,12 +73,14 @@ namespace Crashers.Combat
 
         public void Cancel()
         {
+            bool swinging = phase == SwingPhase.Startup || phase == SwingPhase.Active || phase == SwingPhase.Recovery;
             phase = SwingPhase.Idle;
             phaseTime = 0f;
             phaseDuration = 0f;
             hasBuffer = false;
             alreadyHit.Clear();
             if (flash != null) flash.Release();
+            if (swinging) SwingCancelled?.Invoke();
         }
 
         void Buffer(AttackKind kind)
@@ -131,6 +136,7 @@ namespace Crashers.Combat
             phaseDuration = phaseTime;
             alreadyHit.Clear();
             if (flash != null) flash.Hold(new Color(1f, 0.92f, 0.65f));
+            SwingStarted?.Invoke();
         }
 
         void EnterActive()

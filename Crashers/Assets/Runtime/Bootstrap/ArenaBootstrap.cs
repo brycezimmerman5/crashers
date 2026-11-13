@@ -96,7 +96,7 @@ namespace Crashers.Bootstrap
             player = CreateActor(
                 "Player", content.Player, playerSprite, Faction.Player,
                 PlayerStartX, PlayerStartZ, bounds, 1f, 0.28f, 0.34f, 0.05f, 1.35f,
-                true, true, shotSprite, areaSprite, barSprite);
+                true, true, shotSprite, areaSprite, barSprite, true);
             playerMotor = player.Motor;
             player.Combat.SetLoadout(content.Player.LightChain, content.Player.HeavyChain, content.Player.Aerial);
             CreateCamera(playerMotor);
@@ -320,7 +320,8 @@ namespace Crashers.Bootstrap
             bool withGear,
             Sprite projectileSprite,
             Sprite areaSprite,
-            Sprite barSprite)
+            Sprite barSprite,
+            bool useViking = false)
         {
             var actor = new Actor();
             actor.Root = new GameObject(actorName);
@@ -378,7 +379,20 @@ namespace Crashers.Bootstrap
                 actor.Caster.Configure(actor.Entity, actor.Motor, actor.Stats, actor.Mana, null, projectileSprite, areaSprite);
             }
             if (actor.Equipment != null) actor.Equipment.Configure(actor.Inventory, actor.Stats, actor.Combat);
-            bars.Bind(actor.Health, bar, renderer, 0.9f * visualScale);
+            SpriteRenderer sortBody = renderer;
+            float barWidth = 0.9f * visualScale;
+            if (useViking && VikingRig.TryMount(
+                    visual.transform, actor.Entity, actor.Combat, actor.Motor, actor.Hurtbox, actor.Flash,
+                    out SpriteRenderer vikingBody, out float vikingWidth))
+            {
+                renderer.enabled = false;
+                FacingSprite facing = visual.GetComponent<FacingSprite>();
+                if (facing != null) facing.enabled = false;
+                if (vikingBody != null) sortBody = vikingBody;
+                barWidth = vikingWidth;
+                barObject.transform.localPosition = new Vector3(0f, VikingArt.TargetHeight + 0.02f, 0f);
+            }
+            bars.Bind(actor.Health, bar, sortBody, barWidth);
             return actor;
         }
 

@@ -15,12 +15,20 @@ namespace Crashers.Characters
         Motor2D5 motor;
         PlayBounds bounds;
         Hurtbox hurtbox;
+        Vector3 authoredScale = Vector3.one;
+        bool faceWithEntity;
 
-        public void Bind(Motor2D5 body, PlayBounds playBounds, Hurtbox box)
+        public void Bind(Motor2D5 body, PlayBounds playBounds, Hurtbox box, bool face = false)
         {
             motor = body;
             bounds = playBounds;
             hurtbox = box;
+            faceWithEntity = face;
+            Vector3 scale = transform.localScale;
+            authoredScale = new Vector3(
+                Mathf.Max(0.01f, Mathf.Abs(scale.x)),
+                Mathf.Max(0.01f, Mathf.Abs(scale.y)),
+                1f);
         }
 
         public static float Multiplier(float groundZ, float zMin, float zMax)
@@ -34,7 +42,14 @@ namespace Crashers.Characters
         {
             if (motor == null || bounds == null) return;
             float mul = Multiplier(motor.GroundZ, bounds.ZMin, bounds.ZMax);
-            transform.localScale = new Vector3(mul, mul, 1f);
+            float sign = 1f;
+            if (faceWithEntity)
+            {
+                Entity entity = GetComponent<Entity>();
+                if (entity == null) entity = GetComponentInParent<Entity>();
+                if (entity != null && entity.Facing < 0) sign = -1f;
+            }
+            transform.localScale = new Vector3(sign * authoredScale.x * mul, authoredScale.y * mul, 1f);
             if (hurtbox != null) hurtbox.SetBodyScale(mul);
         }
     }

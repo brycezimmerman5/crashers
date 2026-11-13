@@ -1,30 +1,30 @@
 using Crashers.Combat;
-using Crashers.Content;
 using UnityEngine;
 
 namespace Crashers.Characters
 {
     /// <summary>
-    /// Faces the viking rig and fires the attack1 trigger when a swing starts.
-    /// Idle is the controller default, so it plays with no extra trigger.
+    /// Fires attack1 for a light swing and attack2 for a heavy swing.
+    /// Idle is the controller default. The player root mirrors when he turns.
     /// </summary>
     public sealed class VikingPlayer : MonoBehaviour
     {
-        Entity entity;
+        const string LightTrigger = "attack1";
+        const string HeavyTrigger = "attack2";
+
         Animator animator;
         CombatController combat;
 
         public void Bind(Entity body, Animator anim, CombatController attacks)
         {
-            entity = body;
             animator = anim;
+            if (animator == null && body != null) animator = body.GetComponentInChildren<Animator>(true);
             combat = attacks;
             if (combat != null)
             {
                 combat.SwingStarted += OnSwing;
                 combat.SwingCancelled += OnCancel;
             }
-            ApplyFacing();
         }
 
         void OnDestroy()
@@ -36,25 +36,20 @@ namespace Crashers.Characters
 
         void OnSwing()
         {
-            if (animator != null) animator.SetTrigger(VikingArt.AttackTrigger);
+            if (animator == null) return;
+            bool heavy = combat != null && combat.ActiveKind == AttackKind.Heavy;
+            animator.ResetTrigger(LightTrigger);
+            animator.ResetTrigger(HeavyTrigger);
+            animator.SetTrigger(heavy ? HeavyTrigger : LightTrigger);
         }
 
         void OnCancel()
         {
             if (animator == null) return;
-            animator.ResetTrigger(VikingArt.AttackTrigger);
-            animator.Play(VikingArt.IdleState, 0, 0f);
-        }
-
-        void LateUpdate()
-        {
-            ApplyFacing();
-        }
-
-        void ApplyFacing()
-        {
-            float sign = entity != null && entity.Facing < 0 ? -1f : 1f;
-            transform.localScale = new Vector3(sign, 1f, 1f);
+            animator.ResetTrigger(LightTrigger);
+            animator.ResetTrigger(HeavyTrigger);
+            int idle = Animator.StringToHash("idle");
+            if (animator.HasState(0, idle)) animator.Play(idle, 0, 0f);
         }
     }
 }

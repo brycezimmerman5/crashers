@@ -148,6 +148,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 22d8ea5548f648d7574b1eeea65fa64a, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Crashers.Runtime::Crashers.Bootstrap.ArenaBootstrap
+  playerPrefab: {fileID: 0}
 --- !u!4 &519420030
 Transform:
   m_ObjectHideFlags: 0

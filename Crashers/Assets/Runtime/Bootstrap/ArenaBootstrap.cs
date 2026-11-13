@@ -13,7 +13,7 @@ using UnityEngine;
 namespace Crashers.Bootstrap
 {
     /// <summary>
-    /// Builds the test arena at runtime. The scene itself only references this component.
+    /// Builds the test arena at runtime. Assign a rigged player prefab; the arena instantiates that character.
     /// Sections run to the right. The current fight stays inside its X range until it is clear.
     /// </summary>
     public sealed class ArenaBootstrap : MonoBehaviour
@@ -48,6 +48,10 @@ namespace Crashers.Bootstrap
 
         bool gameStarted;
 
+        [SerializeField]
+        [Tooltip("Rigged player. The arena instantiates this prefab and wires it as the player.")]
+        GameObject playerPrefab;
+
         void Start() => GameIntro.Open(this);
 
         public void BeginGame()
@@ -79,7 +83,6 @@ namespace Crashers.Bootstrap
         void Build()
         {
             content = GameContent.Create();
-            Sprite playerSprite = PlaceholderSprites.Character(new Color(0.22f, 0.45f, 0.95f), new Color(0.96f, 0.82f, 0.68f));
             meleeSprite = PlaceholderSprites.Character(new Color(0.82f, 0.18f, 0.16f), new Color(0.35f, 0.16f, 0.14f));
             rangedSprite = PlaceholderSprites.Character(new Color(0.58f, 0.28f, 0.86f), new Color(0.9f, 0.86f, 0.95f));
             bossSprite = PlaceholderSprites.Character(new Color(0.95f, 0.55f, 0.12f), new Color(0.45f, 0.22f, 0.08f));
@@ -93,10 +96,8 @@ namespace Crashers.Bootstrap
             new GameObject("Hit Stop").AddComponent<HitStop>();
             slots = new GameObject("Enemy Slots").AddComponent<EnemySlotAssigner>();
 
-            player = CreateActor(
-                "Player", content.Player, playerSprite, Faction.Player,
-                PlayerStartX, PlayerStartZ, bounds, 1f, 0.28f, 0.34f, 0.05f, 1.35f,
-                true, true, shotSprite, areaSprite, barSprite, true);
+            player = SpawnPlayerPrefab();
+            if (player == null) return;
             playerMotor = player.Motor;
             player.Combat.SetLoadout(content.Player.LightChain, content.Player.HeavyChain, content.Player.Aerial);
             CreateCamera(playerMotor);
@@ -105,8 +106,12 @@ namespace Crashers.Bootstrap
             player.Caster.Configure(player.Entity, player.Motor, player.Stats, player.Mana, progression.Unlocks, shotSprite, areaSprite);
             player.Caster.SetSlots(content.Fireball, content.Shockwave, content.Bolt);
 
-            var input = player.Root.AddComponent<PlayerInputSource>();
-            var driver = player.Root.AddComponent<PlayerDriver>();
+            PlayerInputSource input = player.Root.GetComponent<PlayerInputSource>();
+            if (input == null) input = player.Root.GetComponentInChildren<PlayerInputSource>(true);
+            if (input == null) input = player.Root.AddComponent<PlayerInputSource>();
+            PlayerDriver driver = player.Root.GetComponent<PlayerDriver>();
+            if (driver == null) driver = player.Root.GetComponentInChildren<PlayerDriver>(true);
+            if (driver == null) driver = player.Root.AddComponent<PlayerDriver>();
             driver.Configure(
                 input, player.Motor, player.Combat, player.Caster, player.Entity,
                 player.Equipment, player.Inventory, player.Health, player.Hurtbox,
@@ -303,6 +308,146 @@ namespace Crashers.Bootstrap
             return service;
         }
 
+        Actor SpawnPlayerPrefab()
+        {
+            if (playerPrefab == null)
+            {
+                Debug.LogError("Assign your rigged character to Player Prefab on the Arena object. The arena no longer builds the player.");
+                return null;
+            }
+
+            var actor = new Actor();
+            actor.Root = Instantiate(playerPrefab);
+            actor.Root.name = "Player";
+            actor.Entity = FindOrAdd<Entity>(actor.Root);
+            actor.Motor = FindOrAdd<Motor2D5>(actor.Root);
+            actor.Stats = FindOrAdd<CharacterStats>(actor.Root);
+            actor.Health = FindOrAdd<Health>(actor.Root);
+            actor.Reaction = FindOrAdd<HitReaction>(actor.Root);
+            actor.Hurtbox = FindOrAdd<Hurtbox>(actor.Root);
+            actor.Combat = FindOrAdd<CombatController>(actor.Root);
+            actor.Mana = FindOrAdd<Mana>(actor.Root);
+            actor.Caster = FindOrAdd<AbilityCaster>(actor.Root);
+            actor.Inventory = FindOrAdd<Inventory>(actor.Root);
+            actor.Equipment = FindOrAdd<Equipment>(actor.Root);
+
+            List<SpriteRenderer> body = BodySprites(actor.Root);
+            actor.Flash = actor.Root.GetComponentInChildren<SpriteFlash>(true);
+            if (actor.Flash == null) actor.Flash = actor.Root.AddComponent<SpriteFlash>();
+            if (body.Count > 0) actor.Flash.Adopt(body.ToArray());
+            for (int i = 0; i < body.Count; i++)
+            {
+                if (body[i].GetComponent<DepthSorter>() == null)
+                    body[i].gameObject.AddComponent<DepthSorter>();
+            }
+
+            FacingSprite[] facings = actor.Root.GetComponentsInChildren<FacingSprite>(true);
+            for (int i = 0; i < facings.Length; i++) facings[i].enabled = false;
+
+            actor.Stats.Configure(content.Player);
+            actor.Entity.Configure(Faction.Player, actor.Health);
+            actor.Health.Bind(actor.Stats);
+            actor.Motor.Configure(bounds, actor.Stats.MoveSpeed);
+            actor.Motor.Teleport(PlayerStartX, PlayerStartZ);
+
+            float halfWidth = 0.28f;
+            float heightMax = 1.35f;
+            float barWidth = 0.9f;
+            float barY = 1.7f;
+            if (TryMeasureSprites(body, out Bounds visual))
+            {
+                halfWidth = Mathf.Max(0.2f, visual.size.x * 0.32f);
+                heightMax = Mathf.Max(0.6f, visual.size.y * 0.92f);
+                float scaleX = Mathf.Max(0.01f, Mathf.Abs(actor.Root.transform.lossyScale.x));
+                float scaleY = Mathf.Max(0.01f, Mathf.Abs(actor.Root.transform.lossyScale.y));
+                barWidth = visual.size.x / scaleX * 0.72f;
+                barY = (visual.max.y - actor.Root.transform.position.y) / scaleY + 0.02f;
+            }
+
+            actor.Hurtbox.Configure(actor.Entity, actor.Motor, halfWidth, 0.34f, 0.05f, heightMax);
+            DepthScale depth = FindOrAdd<DepthScale>(actor.Root);
+            depth.Bind(actor.Motor, bounds, actor.Hurtbox, true);
+            actor.Reaction.Configure(actor.Health, actor.Motor, actor.Flash, actor.Hurtbox);
+            actor.Combat.Configure(actor.Entity, actor.Motor, actor.Stats, actor.Flash);
+            if (content.Player != null)
+                actor.Combat.SetLoadout(content.Player.LightChain, content.Player.HeavyChain, content.Player.Aerial);
+            actor.Mana.Bind(actor.Stats);
+            actor.Caster.Configure(actor.Entity, actor.Motor, actor.Stats, actor.Mana, null, shotSprite, areaSprite);
+            actor.Equipment.Configure(actor.Inventory, actor.Stats, actor.Combat);
+
+            Animator animator = actor.Root.GetComponentInChildren<Animator>(true);
+            VikingPlayer animation = actor.Root.GetComponentInChildren<VikingPlayer>(true);
+            if (animation == null && animator != null)
+                animation = animator.gameObject.AddComponent<VikingPlayer>();
+            if (animation != null)
+            {
+                if (animator == null) animator = animation.GetComponentInChildren<Animator>(true);
+                animation.Bind(actor.Entity, animator, actor.Combat);
+            }
+
+            SpriteRenderer sortBody = body.Count > 0 ? body[0] : null;
+            HealthBar bars = actor.Root.GetComponentInChildren<HealthBar>(true);
+            SpriteRenderer barRenderer;
+            if (bars == null)
+            {
+                var barObject = new GameObject("Health Bar");
+                barObject.transform.SetParent(actor.Root.transform, false);
+                barObject.transform.localPosition = new Vector3(0f, barY, 0f);
+                barRenderer = barObject.AddComponent<SpriteRenderer>();
+                barRenderer.sprite = barSprite;
+                bars = barObject.AddComponent<HealthBar>();
+                bars.Bind(actor.Health, barRenderer, sortBody, barWidth);
+            }
+            else
+            {
+                barRenderer = bars.GetComponent<SpriteRenderer>();
+                if (barRenderer == null) barRenderer = bars.GetComponentInChildren<SpriteRenderer>(true);
+                bars.Bind(actor.Health, barRenderer, sortBody, barWidth, false);
+            }
+
+            actor.Visual = animator != null ? animator.transform : actor.Root.transform;
+            return actor;
+        }
+
+        static T FindOrAdd<T>(GameObject root) where T : Component
+        {
+            T found = root.GetComponent<T>();
+            if (found == null) found = root.GetComponentInChildren<T>(true);
+            if (found == null) found = root.AddComponent<T>();
+            return found;
+        }
+
+        static List<SpriteRenderer> BodySprites(GameObject root)
+        {
+            var list = new List<SpriteRenderer>();
+            SpriteRenderer[] renderers = root.GetComponentsInChildren<SpriteRenderer>(true);
+            for (int i = 0; i < renderers.Length; i++)
+            {
+                SpriteRenderer renderer = renderers[i];
+                if (renderer == null || renderer.GetComponentInParent<HealthBar>(true) != null) continue;
+                list.Add(renderer);
+            }
+            return list;
+        }
+
+        static bool TryMeasureSprites(List<SpriteRenderer> renderers, out Bounds bounds)
+        {
+            bounds = new Bounds();
+            bool any = false;
+            for (int i = 0; i < renderers.Count; i++)
+            {
+                SpriteRenderer renderer = renderers[i];
+                if (renderer == null || renderer.sprite == null || !renderer.enabled) continue;
+                if (!any)
+                {
+                    bounds = renderer.bounds;
+                    any = true;
+                }
+                else bounds.Encapsulate(renderer.bounds);
+            }
+            return any;
+        }
+
         static Actor CreateActor(
             string actorName,
             CharacterDefinition definition,
@@ -320,8 +465,7 @@ namespace Crashers.Bootstrap
             bool withGear,
             Sprite projectileSprite,
             Sprite areaSprite,
-            Sprite barSprite,
-            bool useViking = false)
+            Sprite barSprite)
         {
             var actor = new Actor();
             actor.Root = new GameObject(actorName);
@@ -379,20 +523,8 @@ namespace Crashers.Bootstrap
                 actor.Caster.Configure(actor.Entity, actor.Motor, actor.Stats, actor.Mana, null, projectileSprite, areaSprite);
             }
             if (actor.Equipment != null) actor.Equipment.Configure(actor.Inventory, actor.Stats, actor.Combat);
-            SpriteRenderer sortBody = renderer;
             float barWidth = 0.9f * visualScale;
-            if (useViking && VikingRig.TryMount(
-                    visual.transform, actor.Entity, actor.Combat, actor.Motor, actor.Hurtbox, actor.Flash,
-                    out SpriteRenderer vikingBody, out float vikingWidth))
-            {
-                renderer.enabled = false;
-                FacingSprite facing = visual.GetComponent<FacingSprite>();
-                if (facing != null) facing.enabled = false;
-                if (vikingBody != null) sortBody = vikingBody;
-                barWidth = vikingWidth;
-                barObject.transform.localPosition = new Vector3(0f, VikingArt.TargetHeight + 0.02f, 0f);
-            }
-            bars.Bind(actor.Health, bar, sortBody, barWidth);
+            bars.Bind(actor.Health, bar, renderer, barWidth);
             return actor;
         }
 

@@ -13,12 +13,17 @@ namespace Crashers.Characters
         float width = 1.8f;
         bool placed;
 
-        public void Bind(Health source, SpriteRenderer bar, SpriteRenderer bodySprite, float barWidth)
+        public void Bind(Health source, SpriteRenderer bar, SpriteRenderer bodySprite, float barWidth, bool place = true)
         {
             health = source;
             fill = bar;
             body = bodySprite;
             width = barWidth * WidthScale;
+            if (!place)
+            {
+                placed = true;
+                return;
+            }
             if (placed || fill == null) return;
             placed = true;
             Vector3 pos = fill.transform.localPosition;
@@ -35,10 +40,15 @@ namespace Crashers.Characters
             fill.enabled = show;
             if (!show) return;
             float amount = Mathf.Clamp01(health.Fraction);
+            float parentX = fill.transform.parent != null ? fill.transform.parent.lossyScale.x : 1f;
+            float sign = parentX < 0f ? -1f : 1f;
             var scale = fill.transform.localScale;
-            scale.x = Mathf.Max(0.05f, width * amount);
+            scale.x = Mathf.Max(0.05f, width * amount) * sign;
             scale.y = BarHeight;
             fill.transform.localScale = scale;
+            Vector3 pos = fill.transform.localPosition;
+            pos.x = -width * 0.5f * sign;
+            fill.transform.localPosition = pos;
             fill.color = Color.Lerp(new Color(0.85f, 0.15f, 0.12f), new Color(0.25f, 0.85f, 0.28f), amount);
             if (body != null) fill.sortingOrder = body.sortingOrder + 2;
         }
